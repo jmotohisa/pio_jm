@@ -13,3 +13,18 @@
 [submodule "Projects/esp32dev_DS1307test"]
 	path = Projects/esp32dev_DS1307test
 	url = motohisa@rihopro.ist.hokudai.ac.jp:/Users/motohisa/gitrepo/pio/esp32dev_DS1307test.git
+[submodule "Projects/Projects/gpsmap.git"]
+	path = Projects/Projects/gpsmap.git
+	url = motohisa@rihopro.ist.hokudai.ac.jp:/Users/motohisa/gitrepo/pio/gpsmap.git
+[submodule "Projects/gpsmap.git"]
+	path = Projects/gpsmap.git
+	url = motohisa@rihopro.ist.hokudai.ac.jp:/Users/motohisa/gitrepo/pio/gpsmap.git
+[submodule "Projects/gpsmap"]
+	path = Projects/gpsmap
+	url = motohisa@rihopro.ist.hokudai.ac.jp:/Users/motohisa/gitrepo/pio/gpsmap.git
+[submodule "Projects/ESPWifi-Temp-Logger"]
+	path = Projects/ESPWifi-Temp-Logger
+	url = motohisa@rihopro.ist.hokudai.ac.jp:/Users/motohisa/gitrepo/pio/ESPWiFi-Temp-Logger.git
+[submodule "Projects/myesp32-temptest"]
+	path = Projects/myesp32-temptest
+	url = motohisa@rihopro.ist.hokudai.ac.jp:/Users/motohisa/gitrepo/pio/myesp32-temptest.git
