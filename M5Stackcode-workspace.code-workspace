@@ -1,0 +1,13 @@
+{
+	"folders": [
+		{
+			"name": "Projects",
+			"path": "Projects"
+		},
+		{
+			"name": "VL53L0X_M5StickC",
+			"path": "Projects/VL53L0X_M5StickC"
+		}
+	],
+	"settings": {}
+}
