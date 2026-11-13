@@ -71,7 +71,7 @@
 
 // use TinyGPS++ for extracting initial data
 //#define USE_TINYGPS
-
+#include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
 #include <SD.h>
@@ -130,6 +130,30 @@ bool fileEnable;
 bool runMode;
 bool logFileOpened;
 
+void recvStr();
+void doLogging();
+int strip_NMEA(char *orig, int offset, int count);
+bool checkSDFile();
+void send_nmea_command(const char *p);
+void send_PUBX_packet(const char *p);
+void configure_GP8013T();
+void gpsTime(const char *utcTime);
+void gpsDate(const char *utcDate);
+void gpsTime0(uint16_t UTC);
+void gpsDate0(uint16_t dateRead);
+void UTCtoLT();
+static void printInt(unsigned long val, bool valid, int len);
+static void printFloat(float val, bool valid, int len, int prec);
+static void printStr(const char *str, int len);
+// static void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
+void flushSD();
+bool setFileName();
+int mysubstr(char *t, const char *s, int pos, unsigned int len );
+// static void smartDelay(int ms);
+void dateTime(uint16_t* date, uint16_t* time);
+
+
+
 void setup() {
   int offset;
   char utcTime[10], utcDate[7];
@@ -137,14 +161,14 @@ void setup() {
   char NS[2], WE[2];
   char statGPS[2];
  // char GPSStr[7];
-  char localTime0[9], localDate0[9];
+//  char localTime0[9], localDate0[9];
   char *strbuf2;
 
   pinMode(LED_PIN_NO, OUTPUT) ;      // LEDに接続
   pinMode(SW_PIN_NO, INPUT_PULLUP ) ; // SW に接続し内部プルアップに設定
 
 #ifdef DEBUG_SERIAL
-  Serial.begin(115200);
+  Serial.begin(9600);
   Serial.println("GPS logger started.");
 #endif
   
@@ -426,7 +450,8 @@ int strip_NMEA(char *orig, int offset, int count)
 bool checkSDFile()
 {
   // check log file
-  int i, loopmax = 100;
+  // int i;
+  // int loopmax = 100;
   bool fileNameSet;
 
   oled.setCursor(0,6);
@@ -719,7 +744,6 @@ static void smartDelay(unsigned long ms)
   delay(ms);
   #endif
 }
-
 
 static void printFloat(float val, bool valid, int len, int prec)
 {
