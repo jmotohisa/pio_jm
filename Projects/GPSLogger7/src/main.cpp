@@ -87,6 +87,13 @@ TinyGPSPlus gps;
 SSD1306AsciiWire oled;
 SdFat SD;
 
+#ifdef FLUSH_TIMER_ENABLE
+  #ifdef STM32duino
+  HardwareTimer *MyTim = new HardwareTimer(TIM2);
+  #endif
+#endif
+
+
 File logFile;
 
 uint8_t gpsHour, gpsMin, gpsSec;
@@ -569,7 +576,12 @@ void setup() {
 #ifndef STM32duino
   MsTimer2::set(60000, flushSD);
   MsTimer2::start();
+  #else
+  myTim->attacheIntterrpt(flushSD);
+  myTim->setOverflow(60000,MICROSEC_FORMAT);
+  myTim->resume();
 #endif
+
 #endif
 
   runMode = 0;

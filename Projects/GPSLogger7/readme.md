@@ -12,7 +12,7 @@ Hardware connection:
 	• MISO: PA6
 	• MOSI: PA7
 	• CS: PA4（コード側で任意のGPIOに変更可能）
-HardwareSerial (serial2)
+HardwareSerial (serial2) (for GPS : YIC GT-902PMGG)
 	• HardwareSerial Serial2(PA3, PA2);
     RX2: PA3
     TX2: PA2

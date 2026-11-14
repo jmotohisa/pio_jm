@@ -70,7 +70,8 @@
 #define INTERVAL 5
 
 // use TinyGPS++ for extracting initial data
-//#define USE_TINYGPS
+#define USE_TINYGPS
+
 #include <Arduino.h>
 #include <Wire.h>
 #include <SPI.h>
@@ -78,14 +79,9 @@
 #ifdef USE_TINYGPS
   #include <TinyGPS++.h>
 #endif
-/*
-#include <SoftwareSerial.h>
-#ifndef STM32duino
-  #include <SoftwareSerial.h>
-#endif
-*/
+
 #ifdef FLUSH_TIMER_ENABLE
-    #include <MsTimer2.h>
+  #include <MsTimer2.h>
 #endif
 #include "SSD1306Ascii.h"
 //#include "SSD1306AsciiWire.h"
@@ -145,14 +141,12 @@ void UTCtoLT();
 static void printInt(unsigned long val, bool valid, int len);
 static void printFloat(float val, bool valid, int len, int prec);
 static void printStr(const char *str, int len);
-// static void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
+static void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
 void flushSD();
 bool setFileName();
 int mysubstr(char *t, const char *s, int pos, unsigned int len );
 // static void smartDelay(int ms);
 void dateTime(uint16_t* date, uint16_t* time);
-
-
 
 void setup() {
   int offset;
@@ -211,7 +205,7 @@ void setup() {
     oled.setCursor(0,0);
     oled.print("Waiting Valid data");
     #ifdef DEBUG_SERIAL
-    Serial.println("Waiting for valid location data.");
+    Serial.println("Waiting for valid location and date data.");
     printInt(tinyGps.satellites.value(), tinyGps.satellites.isValid(), 5);
     printFloat(tinyGps.hdop.hdop(), tinyGps.hdop.isValid(), 6, 1);
     printFloat(tinyGps.location.lat(), tinyGps.location.isValid(), 11, 6);
@@ -223,7 +217,7 @@ void setup() {
     printFloat(tinyGps.speed.kmph(), tinyGps.speed.isValid(), 6, 2);
     printStr(tinyGps.course.isValid() ? TinyGPSPlus::cardinal(tinyGps.course.deg()) : "*** ", 6);
     #endif
-  } while(!tinyGps.location.isValid() && !tinyGps.date.isValid());
+  } while(!tinyGps.location.isValid() || !tinyGps.date.isValid());
 #else
 do {
   delay(500);
