@@ -46,10 +46,7 @@
 //#include "SSD1306AsciiWire.h"
 #include "SSD1306AsciiAvrI2c.h"
 
-#ifdef USE_TINYGPS
-  #include <TinyGPS++.h>
-  TinyGPSPlus tinyGps;
-#endif
+#include <TinyGPS++.h>
 
 #ifdef FLUSH_TIMER_ENABLE
   #include <MsTimer2.h>
@@ -81,11 +78,15 @@
 
 //SSD1306AsciiWire oled;
 SSD1306AsciiAvrI2c oled;
+TinyGPSPlus tinyGps;
 
 File logFile;
 
 int gpsHour, gpsMin, gpsSec;
 int gpsDay, gpsMonth, gpsYear;
+
+int localHour, localMin, localSec;
+int localDay, localMonth, localYear;
 
 char strbuf[BUFSIZE];
 char s1[BUF2SIZE];
@@ -96,40 +97,23 @@ bool runMode;
 bool logFileOpened;
 
 // Prototypes
-void doLogging();
-void recvStr();
-int strip_NMEA(char *orig, int offset, int count);
 bool checkSDFile();
 void send_nmea_command(const char *p);
 void send_PUBX_packet(const char *p);
 void dateTime(uint16_t* date, uint16_t* time);
-void gpsTime(const char *utcTime);
-void gpsDate(const char *utcDate);
 void UTCtoLT();
-int mysubstr(char *t, const char *s, int pos, unsigned int len );
 bool setFileName();
 void flushSD();
-void log_to_file();
 static void smartDelay(unsigned long ms);
 void configure_GP8013T();
+void doLogging2();
 
-void gpsTime0(uint16_t UTC);
-void gpsDate0(uint16_t dateRead);
 static void printInt(unsigned long val, bool valid, int len);
 static void printFloat(float val, bool valid, int len, int prec);
 static void printStr(const char *str, int len);
 static void printDateTime(TinyGPSDate &d, TinyGPSTime &t);
 
 void setup() {
-  // int offset;
-  // char utcTime[10], utcDate[7];
-  // char latitude[11], longtude[12];
-  // char NS[2], WE[2];
-  // char statGPS[2];
-  // char GPSStr[7];
-  // char localTime0[9], localDate0[9];
-  // char *strbuf2;
-
 #ifdef DEBUG_SERIAL
   Serial.begin(9600);
   delay(1000);
@@ -156,38 +140,45 @@ void setup() {
 //  oled.setFont(System5x7);
   oled.clear();
   oled.setCursor(0,0);
-
+  oled.print(PROGRAM);
+  oled.print(" Version: ");
+  oled.print(VERSION);
+ 
   // initialize Software Serial and GPS
   GPSRaw.begin(9600);
   while(!GPSRaw);
   delay(1000);
-
+  oled.setCursor(0,6);
   oled.print("GPS ready");
+  oled.setCursor(0,12);
+  oled.print("Waiting for valid data");
+
 #ifdef DEBUG_SERIAL
-  #ifdef USE_TINYGPS
   Serial.println("GPS ready");
   Serial.println(F("Sats HDOP  Latitude   Longitude   Fix  Date       Time     Date Alt    Course Speed Card  Distance Course Card  Chars Sentences Checksum"));
   Serial.println(F("           (deg)      (deg)       Age                      Age  (m)    --- from GPS ----  ---- to London  ----  RX    RX        Fail"));
   Serial.println(F("----------------------------------------------------------------------------------------------------------------------------------------"));
-  #else
-  Serial.println("GPS ready");
-  #endif
 #endif
 
   // wait until GPSdata becomes valid
-#ifdef USE_TINYGPS
   do {
     delay(500);
-    oled.setCursor(0,0);
-    oled.print("Waiting Valid data");
-    oled.setCursor(0,6);
-    oled.print(tinyGps.location.lat());
-    oled.print(" ");
-    oled.print(tinyGps.location.lng());
-    oled.setCursor(0,12);
-    oled.print(tinyGps.date.year());
-    oled.print(tinyGps.date.month());
-    oled.print(tinyGps.date.day());
+//    oled.setCursor(0,18);
+//    oled.print(tinyGps.location.lat());
+//    oled.print(" ");
+//    oled.print(tinyGps.location.lng());
+    gpsYear = tinyGps.date.year();
+    gpsMonth = tinyGps.date.month();
+    gpsDay = tinyGps.date.day();
+    gpsHour = tinyGps.time.hour();
+    gpsMin = tinyGps.time.minute();
+    gpsSec = tinyGps.time.second();
+
+    oled.setCursor(0,18);
+    oled.print("UTC:");
+    oled.print(gpsYear);
+    oled.print(gpsMonth);
+    oled.print(gpsDay);
     #ifdef DEBUG_SERIAL
     Serial.println("Waiting for valid location and date data.");
     printInt(tinyGps.satellites.value(), tinyGps.satellites.isValid(), 5);
@@ -203,56 +194,22 @@ void setup() {
     Serial.println("");
     #endif
   } while(!tinyGps.location.isValid() || !tinyGps.date.isValid());
-#else
-  do {
-    delay(500);
-    oled.setCursor(0,0);
-    oled.print("waiting Valid data");
-#ifdef DEBUG_SERIAL
-    Serial.println("waiting for Valid data");
-#endif
-    if (GPSRaw.available()) {  // if recived serial signal
-      recvStr();   // read serial data to string buffer
-    }
-#ifdef DEBUG_SERIAL
-    Serial.print(strbuf);
-#endif
-    strbuf2=strstr(strbuf,"$GNRMC");
-    if (strbuf2) { // if RMC line
-      offset = strip_NMEA(strbuf2, 0, 1); // s1 should should be $GNRMC
-      offset = strip_NMEA(strbuf2, offset, 1); // utcTime
-      strcpy(utcTime, s1);
-      offset = strip_NMEA(strbuf2, offset, 1); // status
-      strcpy(statGPS, s1);
-      offset = strip_NMEA(strbuf2, offset, 1); // latitue
-      strcpy(latitude, s1);
-      offset = strip_NMEA(strbuf2, offset, 1); // N/W
-      strcpy(NS, s1);
-      offset = strip_NMEA(strbuf2, offset, 1); // longitude
-      strcpy(longtude, s1);
-      offset = strip_NMEA(strbuf2, offset, 1); // W/E
-      strcpy(WE, s1);
-      offset = strip_NMEA(strbuf2, offset, 3); // utcDate
-      strcpy(utcDate, s1);
-      gpsDate(utcDate);
-      gpsTime(utcTime);
-      break;
-    }
-  } while(1);
-#endif
 
 // initialize SD card
   filename[0]='\0';
   oled.clear();
-  oled.setCursor(0,0);
-  oled.print(PROGRAM);
-  oled.print(" version: ");
-  oled.print(VERSION);
-  oled.setCursor(0,6);
   oled.print("Init SD card");
   pinMode(SD_CHIP_SELECT, OUTPUT);
+  UTCtoLT();
   if (SD.begin(SD_CHIP_SELECT)) {
     fileEnable = checkSDFile();
+    // ファイルが空ならヘッダを書く
+    if (logFile.size() == 0)
+    {
+      logFile.println(
+        "Date_UTC,Time_UTC,Latitude,Longitude,Altitude,Speed,Course");
+      logFile.flush();
+    }
 #ifdef DEBUG_SERIAL
     Serial.println("SD begin succeeded.");
     Serial.print("file name:");
@@ -322,131 +279,20 @@ void loop()
       }
     }
   }
-  doLogging();
-}
-
-void doLogging()
-{
-  char utcTime[10], utcDate[7];
-  char latitude[11], longtude[12];
-  char NS[2], WE[2];
-  char statGPS[2];
-  char localTime0[9], localDate0[9];
-  int offset;
-  char *strbuf2;
-
-  if (GPSRaw.available()) {  // if recived serial signal
-//    digitalWrite(LED_PIN_NO,LED_ON);
-    recvStr();   // read serial data to string buffer
-#ifdef DEBUG_SERIAL
-    Serial.print(strbuf);
-#endif
-    if (logFileOpened == true) {
-      logFile.print(strbuf);
-      logFile.flush();
-    }
-    // digitalWrite(LED_PIN_NO,LED_OFF);
-
-    // Display date/time/latitude/longitude
-    strbuf2=strstr(strbuf,"$GNRMC");
-    if (strbuf2) { // if RMC line
-      offset = strip_NMEA(strbuf2, 0, 1); // s1 should should be $GNRMC
-      offset = strip_NMEA(strbuf, offset, 1); // utcTime
-      strcpy(utcTime, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // status
-      strcpy(statGPS, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // latitue
-      strcpy(latitude, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // N/W
-      strcpy(NS, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // longitude
-      strcpy(longtude, s1);
-      offset = strip_NMEA(strbuf, offset, 1); // W/E
-      strcpy(WE, s1);
-      offset = strip_NMEA(strbuf, offset, 3); // utcDate
-      strcpy(utcDate, s1);
-
-      gpsDate(utcDate);
-      gpsTime(utcTime);
-      UTCtoLT();
-
-      oled.setCursor(0,0);
-      sprintf(localTime0, "%02d:%02d:%02d", gpsHour,gpsMin,gpsSec);
-      oled.print(localTime0);
-
-      oled.setCursor(64,0);
-      sprintf(localDate0, "%02d/%02d/%02d", gpsYear,gpsMonth,gpsDay);
-      oled.print(localDate0);
-
-      if (strchr(statGPS, 'A')) {
-        oled.setCursor(0,2);
-        oled.print(NS);
-        oled.print(latitude);
-        oled.setCursor(0,4);
-        oled.print(WE);
-        oled.print(longtude);
-#ifdef DEBUG_SERIAL
-        Serial.print(NS);
-        Serial.print(latitude);
-        Serial.print(" ");
-        Serial.print(WE);
-        Serial.println(longtude);
-#endif
-      } else {
-        oled.setCursor(0,2);
-        oled.print("GPS invalid");
-      }
-    }
+  while (GPSRaw.available()) {
+    tinyGps.encode(GPSRaw.read());
   }
-}
-
-// recieve string from GPS
-void recvStr()
-{
-  int i = 0;
-  char c;
-  while (1) {
-    if (GPSRaw.available()) {
-      c = GPSRaw.read();
-      strbuf[i] = c;
-      if (c == '\n') break;
-      i++;
-    }
-  }
-  i++;
-  strbuf[i] = '\0';  // \0: end of string
-}
-
-// get info from NMEA sentence
-int strip_NMEA(char *orig, int offset, int count)
-{
-  char *str0, *s0;
-  int i, len;
-
-  for (i = 0; i < count; i++) {
-    str0 = orig + offset;
-    s0 = strchr(str0, ',');
-    len = strlen(str0) - strlen(s0);
-    strncpy(s1, str0, len); // len < BUF2SIZE +1 assumed
-    s1[len] = '\0';
-    offset += strlen(s1) + 1;
-  }
-
-  return offset;
+  doLogging2();
 }
 
 bool checkSDFile()
 {
-  // check log file
-  // int i;
-  // int loopmax = 100;
   bool fileNameSet;
 
   oled.setCursor(0,6);
-
   fileNameSet=setFileName();
   if(strlen(filename)==0)
-    strcpy(filename,"GPtemp.txt");
+    strcpy(filename,"GPtemp.csv");
   oled.println("Opening log file");
 #ifdef DEBUG_SERIAL
   Serial.print("Logfile:");
@@ -563,106 +409,55 @@ void dateTime(uint16_t* date, uint16_t* time)
   *time = FAT_TIME(gpsHour, gpsMin, gpsSec);
 }
 
-// UTC -> (gpsHour, gpsMin, gpsSec)
-void gpsTime0(uint16_t UTC)
-{
-  gpsHour = int(UTC / 10000);
-  gpsMin = int(UTC % 10000 / 100);
-  gpsSec = UTC % 100;
-}
-// Date ->(gpsYear,gpsMonth,gpsYear)
-void gpsDate0(uint16_t dateRead)
-{
-  gpsDay = int(dateRead / 10000);
-  gpsMonth = int(dateRead % 10000 / 100);
-  gpsYear = dateRead % 100; //last 2 digits, e.g. 2013-> 13
-}
-
-void gpsTime(const char *utcTime)
-{
-  char s[3];
-  mysubstr(s,utcTime,0,2);
-  gpsHour=atoi(s);
-  mysubstr(s,utcTime,2,2);
-  gpsMin=atoi(s);
-  mysubstr(s,utcTime,4,2);
-  gpsSec=atoi(s);
-}
-
-void gpsDate(const char *utcDate)
-{
-  char s[3];
-  mysubstr(s,utcDate,4,2);
-  gpsYear = atoi(s);
-  mysubstr(s,utcDate,2,2);
-  gpsMonth = atoi(s);
-  mysubstr(s,utcDate,0,2);
-  gpsDay = atoi(s);
-}
-/*
-  // Latitude/Longitude
-  void gpsLatLong(int lat1, int lat2, int long1, int long2)
-  {
-  gpsLat = int(lat1/100) + (lat1%100)/60.0 + float(lat2)/10000.0/60.0;
-  gpsLong = int(long1/100) + (long1%100)/60.0 + float(long2)/10000.0/60.0;
-  }
-*/
-
 void UTCtoLT()
 {
-//  int leap = (gpsYear % 4) * 4 / gpsYear - (gpsYear % 100) * 100 / gpsYear + (gpsYear % 400) * 400 / gpsYear ;
   int leap = (gpsYear / 4) * 4 / gpsYear ;
   int DaysAMonth[12] = {31, 28 + leap, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
-  gpsHour += TimeZone;
-  if (gpsHour < 0)
+  localHour = gpsHour;
+  localMin = gpsMin;
+  localSec = gpsSec;
+  localDay = gpsDay;
+  localMonth = gpsMonth;
+  localYear = gpsYear;
+
+  localHour += TimeZone;
+  if (localHour < 0)
   {
-    gpsHour += 24;
-    gpsDay -= 1;
-    if (gpsDay < 1)
+    localHour += 24;
+    localDay -= 1;
+    if (localDay < 1)
     {
-      if (gpsMonth == 1)
+      if (localMonth == 1)
       {
-        gpsMonth = 12;
-        gpsYear -= 1;
+        localMonth = 12;
+        localYear -= 1;
       }
       else
       {
-        gpsMonth -= 1;
+        localMonth -= 1;
       }
-      gpsDay = DaysAMonth[gpsMonth - 1];
+      localDay = DaysAMonth[localMonth - 1];
     }
   }
-  if (gpsHour >= 24)
+  if (localHour >= 24)
   {
-    gpsHour -= 24;
-    gpsDay += 1;
-    if (gpsDay > DaysAMonth[gpsMonth - 1])
+    localHour -= 24;
+    localDay += 1;
+    if (localDay > DaysAMonth[localMonth - 1])
     {
-      gpsDay = 1;
-      gpsMonth += 1;
-      if (gpsMonth > 12) {
-        gpsYear += 1;
-        gpsMonth = 1;
+      localDay = 1;
+      localMonth += 1;
+      if (localMonth > 12) {
+        localYear += 1;
+        localMonth = 1;
       }
     }
   }
-}
-
-int mysubstr(char *t, const char *s, int pos, unsigned int len )
-{
-//    if( pos < 0 || len < 0 || len > strlen(s) )
-    if( pos < 0 || len > strlen(s) )
-        return -1;
-    for( s += pos; *s != '\0' && len > 0; len-- )
-        *t++ = *s++;
-    *t = '\0';
-    return 0;
 }
 
 bool setFileName()
 {
   char tmp[32];
-#ifdef USE_TINYGPS
   TinyGPSDate d;
   d=tinyGps.date;
 
@@ -670,40 +465,22 @@ bool setFileName()
     gpsMonth = d.month();
     gpsDay   = d.day();
     gpsYear  = d.year()-2000;
+    UTCtoLT();
 #ifdef DEBUG_SERIAL
     sprintf(tmp,"%d/%d/%d",gpsYear,gpsMonth,gpsDay);
     Serial.println("");
     Serial.print("UTC:");
     Serial.println(tmp);
-#endif
-    UTCtoLT();
-#ifdef DEBUG_SERIAL
-    sprintf(tmp,"%d/%d/%d",gpsYear,gpsMonth,gpsDay);
+    sprintf(tmp,"%d/%d/%d",localYear,localMonth,localDay);
     Serial.print("local time:");
     Serial.println(tmp);
 #endif
-    sprintf(filename, "GP%02d%02d%02d.txt", gpsYear,gpsMonth,gpsDay);
+    sprintf(filename, "GP%02d%02d%02d.csv", localYear,localMonth,localDay);
     return true;
   } else {
-    sprintf(filename,"GP000000.txt");
+    sprintf(filename,"GP000000.csv");
     return false;
   }
-#else
-#ifdef DEBUG_SERIAL
-    sprintf(tmp,"%d/%d/%d",gpsYear,gpsMonth,gpsDay);
-    Serial.println("");
-    Serial.print("UTC:");
-    Serial.println(tmp);
-#endif
-    UTCtoLT();
-#ifdef DEBUG_SERIAL
-    sprintf(tmp,"%d/%d/%d",gpsYear,gpsMonth,gpsDay);
-    Serial.print("local time:");
-    Serial.println(tmp);
-#endif
-    sprintf(filename, "GP%02d%02d%02d.txt", gpsYear,gpsMonth,gpsDay);
-    return true;
-#endif
 }
 
 void flushSD()
@@ -723,16 +500,12 @@ void flushSD()
 // is being "fed".
 static void smartDelay(unsigned long ms)
 {
-  #ifdef USE_TINYGPS
   unsigned long start = millis();
   do
   {
     while (GPSRaw.available())
       tinyGps.encode(GPSRaw.read());
   } while (millis() - start < ms);
-  #else
-  delay(ms);
-  #endif
 }
 
 static void printFloat(float val, bool valid, int len, int prec)
@@ -769,7 +542,6 @@ static void printInt(unsigned long val, bool valid, int len)
 //  smartDelay(0);
 }
 
-#ifdef USE_TINYGPS
 static void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
 {
   if (!d.isValid())
@@ -798,7 +570,6 @@ static void printDateTime(TinyGPSDate &d, TinyGPSTime &t)
 
   smartDelay(0);
 }
-#endif
 
 static void printStr(const char *str, int len)
 {
@@ -808,124 +579,57 @@ static void printStr(const char *str, int len)
   smartDelay(0);
 }
 
-
-#include <TinyGPSPlus.h>
-#include <SPI.h>
-#include <SD.h>
-#include <SoftwareSerial.h>
-
-static const int RXPin = 4;   // GPS TX -> Arduino RX
-static const int TXPin = 3;   // GPS RX -> Arduino TX
-static const int SD_CS = 10;  // SDカードCS
-
-SoftwareSerial gpsSerial(RXPin, TXPin);
-TinyGPSPlus gps;
-
-File logfile;
-
-void setup()
+void doLogging2()
 {
-  Serial.begin(115200);
-  GPSRaw.begin(9600);
-
-  Serial.println("GPS Logger Start");
-
-  //-----------------------------------
-  // SDカード初期化
-  //-----------------------------------
-  if (!SD.begin(SD_CS))
+  if (tinyGps.location.isValid() &&
+      tinyGps.date.isValid() &&
+      tinyGps.time.isValid())
   {
-    Serial.println("SD init failed");
-    while (1);
-  }
+    smartDelay(5000);
+      if (tinyGps.date.month() < 10) logFile.print("0");
+      logFile.print(tinyGps.date.month());
+      logFile.print("-");
 
-  //-----------------------------------
-  // ファイル作成
-  //-----------------------------------
-  logfile = SD.open("gpslog.csv", FILE_WRITE);
+      if (tinyGps.date.day() < 10) logFile.print("0");
+      logFile.print(tinyGps.date.day());
 
-  if (!logfile)
-  {
-    Serial.println("Cannot open file");
-    while (1);
-  }
+      logFile.print(",");
 
-  // ファイルが空ならヘッダを書く
-  if (logfile.size() == 0)
-  {
-    logfile.println(
-      "Date_UTC,Time_UTC,Latitude,Longitude,Altitude,Speed,Course");
-    logfile.flush();
-  }
+      if (tinyGps.time.hour() < 10) logFile.print("0");
+      logFile.print(tinyGps.time.hour());
+      logFile.print(":");
 
-  Serial.println("Logging started");
-}
+      if (tinyGps.time.minute() < 10) logFile.print("0");
+      logFile.print(tinyGps.time.minute());
+      logFile.print(":");
 
-void loop()
-{
-  while (GPSRaw.available())
-  {
-    gps.encode(GPSRaw.read());
-  }
+      if (tinyGps.time.second() < 10) logFile.print("0");
+      logFile.print(tinyGps.time.second());
 
-  //-----------------------------------
-  // 位置と時刻が有効なとき保存
-  //-----------------------------------
-  static unsigned long lastLog = 0;
+      logFile.print(",");
 
-  if (gps.location.isValid() &&
-      gps.date.isValid() &&
-      gps.time.isValid())
-  {
-    if (millis() - lastLog > 1000)
-    {
-      lastLog = millis();
+      logFile.print(tinyGps.location.lat(), 6);
+      logFile.print(",");
 
-      logfile.print(gps.date.year());
-      logfile.print("-");
+      logFile.print(tinyGps.location.lng(), 6);
+      logFile.print(",");
 
-      if (gps.date.month() < 10) logfile.print("0");
-      logfile.print(gps.date.month());
-      logfile.print("-");
+      logFile.print(tinyGps.altitude.meters(), 1);
+      logFile.print(",");
 
-      if (gps.date.day() < 10) logfile.print("0");
-      logfile.print(gps.date.day());
+      logFile.print(tinyGps.speed.kmph(), 1);
+      logFile.print(",");
 
-      logfile.print(",");
+      logFile.println(tinyGps.course.deg(), 1);
 
-      if (gps.time.hour() < 10) logfile.print("0");
-      logfile.print(gps.time.hour());
-      logfile.print(":");
+      logFile.flush();
 
-      if (gps.time.minute() < 10) logfile.print("0");
-      logfile.print(gps.time.minute());
-      logfile.print(":");
-
-      if (gps.time.second() < 10) logfile.print("0");
-      logfile.print(gps.time.second());
-
-      logfile.print(",");
-
-      logfile.print(gps.location.lat(), 6);
-      logfile.print(",");
-
-      logfile.print(gps.location.lng(), 6);
-      logfile.print(",");
-
-      logfile.print(gps.altitude.meters(), 1);
-      logfile.print(",");
-
-      logfile.print(gps.speed.kmph(), 1);
-      logfile.print(",");
-
-      logfile.println(gps.course.deg(), 1);
-
-      logfile.flush();
-
+#ifdef DEBUG_SERIAL
       Serial.print("Logged: ");
-      Serial.print(gps.location.lat(), 6);
+      Serial.print(tinyGps.location.lat(), 6);
       Serial.print(",");
-      Serial.println(gps.location.lng(), 6);
-    }
+      Serial.println(tinyGps.location.lng(), 6);
+#endif
+
   }
 }
