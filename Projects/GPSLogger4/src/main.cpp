@@ -141,17 +141,19 @@ void setup() {
   oled.clear();
   oled.setCursor(0,0);
   oled.print(PROGRAM);
-  oled.print(" Version: ");
+  oled.setCursor(0,2);
+  oled.print("Version: ");
   oled.print(VERSION);
  
   // initialize Software Serial and GPS
   GPSRaw.begin(9600);
   while(!GPSRaw);
   delay(1000);
-  oled.setCursor(0,6);
+  oled.clear();
+  oled.setCursor(0,0);
   oled.print("GPS ready");
-  oled.setCursor(0,12);
-  oled.print("Waiting for valid data");
+  oled.setCursor(0,2);
+  oled.print("Waiting valid data");
 
 #ifdef DEBUG_SERIAL
   Serial.println("GPS ready");
@@ -162,11 +164,14 @@ void setup() {
 
   // wait until GPSdata becomes valid
   do {
-    delay(500);
+    delay(1000);
 //    oled.setCursor(0,18);
 //    oled.print(tinyGps.location.lat());
 //    oled.print(" ");
 //    oled.print(tinyGps.location.lng());
+    while (GPSRaw.available()) {
+      tinyGps.encode(GPSRaw.read());
+    }
     gpsYear = tinyGps.date.year();
     gpsMonth = tinyGps.date.month();
     gpsDay = tinyGps.date.day();
@@ -174,13 +179,12 @@ void setup() {
     gpsMin = tinyGps.time.minute();
     gpsSec = tinyGps.time.second();
 
-    oled.setCursor(0,18);
+    oled.setCursor(0,4);
     oled.print("UTC:");
     oled.print(gpsYear);
     oled.print(gpsMonth);
     oled.print(gpsDay);
     #ifdef DEBUG_SERIAL
-    Serial.println("Waiting for valid location and date data.");
     printInt(tinyGps.satellites.value(), tinyGps.satellites.isValid(), 5);
     printFloat(tinyGps.hdop.hdop(), tinyGps.hdop.isValid(), 6, 1);
     printFloat(tinyGps.location.lat(), tinyGps.location.isValid(), 11, 6);
@@ -216,7 +220,7 @@ void setup() {
     Serial.println(filename);
 #endif
   } else {
-    oled.setCursor(0,12);
+//    oled.setCursor(0,12);
 //    oled.clearToEOL();
     oled.println("SD begin failed.");
 #ifdef DEBUG_SERIAL
