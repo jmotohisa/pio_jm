@@ -283,6 +283,7 @@ void loop()
     tinyGps.encode(GPSRaw.read());
   }
   doLogging2();
+  smartDelay(5000);
 }
 
 bool checkSDFile()
@@ -585,7 +586,6 @@ void doLogging2()
       tinyGps.date.isValid() &&
       tinyGps.time.isValid())
   {
-    smartDelay(5000);
       if (tinyGps.date.month() < 10) logFile.print("0");
       logFile.print(tinyGps.date.month());
       logFile.print("-");
