@@ -165,10 +165,7 @@ void setup() {
   // wait until GPSdata becomes valid
   do {
     delay(1000);
-//    oled.setCursor(0,18);
-//    oled.print(tinyGps.location.lat());
-//    oled.print(" ");
-//    oled.print(tinyGps.location.lng());
+
     while (GPSRaw.available()) {
       tinyGps.encode(GPSRaw.read());
     }
@@ -207,13 +204,6 @@ void setup() {
   UTCtoLT();
   if (SD.begin(SD_CHIP_SELECT)) {
     fileEnable = checkSDFile();
-    // ファイルが空ならヘッダを書く
-    if (logFile.size() == 0)
-    {
-      logFile.println(
-        "Date_UTC,Time_UTC,Latitude,Longitude,Altitude,Speed,Course");
-      logFile.flush();
-    }
 #ifdef DEBUG_SERIAL
     Serial.println("SD begin succeeded.");
     Serial.print("file name:");
@@ -269,10 +259,17 @@ void loop()
       }
       if(fileEnable) {
         logFile = SD.open(filename, FILE_WRITE);
+        // ファイルが空ならヘッダを書く
+        if (logFile.size() == 0)
+        {
+          logFile.println(
+            "Date_UTC,Time_UTC,Latitude,Longitude,Altitude,Speed,Course");
+          logFile.flush();
+        }
       }
 
       if(!logFile || !fileEnable) {
-        oled.setCursor(0,6);
+        oled.setCursor(0,2);
         oled.print("Can't open logfile");
       } else {
         logFileOpened=true;
@@ -299,11 +296,6 @@ bool checkSDFile()
   if(strlen(filename)==0)
     strcpy(filename,"GPtemp.csv");
   oled.println("Opening log file");
-#ifdef DEBUG_SERIAL
-  Serial.print("Logfile:");
-  Serial.print(filename);
-  Serial.println(" opened");
-#endif
 
 // open log file
   logFile = SD.open(filename, FILE_WRITE);
@@ -323,13 +315,17 @@ bool checkSDFile()
   oled.setCursor(0,6);
   oled.clearToEOL();
   oled.print(filename);
+#ifdef DEBUG_SERIAL
+  Serial.print("Logfile:");
+  Serial.print(filename);
+  Serial.println(" opened");
+  Serial.print("File Size: ");
+  Serial.println(logFile.size());
+#endif
   logFile.close();
   if(fileNameSet) {
     SdFile::dateTimeCallback( &dateTime );
   }
-#ifdef DEBUG_SERIAL
-  Serial.println("log file opened.");
-#endif
 
   return true;
 }
@@ -408,10 +404,10 @@ void dateTime(uint16_t* date, uint16_t* time)
 {
   // GPSやRTCから日付と時間を取得
   // FAT_DATEマクロでフィールドを埋めて日付を返す
-  *date = FAT_DATE(gpsYear + 2000, gpsMonth, gpsDay);
+  *date = FAT_DATE(localYear + 2000, localMonth, localDay);
 
   // FAT_TIMEマクロでフィールドを埋めて時間を返す
-  *time = FAT_TIME(gpsHour, gpsMin, gpsSec);
+  *time = FAT_TIME(localHour, localMin, localSec);
 }
 
 void UTCtoLT()
@@ -589,26 +585,37 @@ void doLogging2()
   if (tinyGps.location.isValid() &&
       tinyGps.date.isValid() &&
       tinyGps.time.isValid())
-  {
-      if (tinyGps.date.month() < 10) logFile.print("0");
-      logFile.print(tinyGps.date.month());
+      {
+        gpsYear=tinyGps.date.year();
+        gpsMonth=tinyGps.date.month();
+        gpsDay = tinyGps.date.day();
+        gpsHour = tinyGps.time.hour();
+        gpsMin = tinyGps.time.minute();
+        gpsSec = tinyGps.time.second();
+        UTCtoLT();
+
+      logFile.print(gpsYear);
       logFile.print("-");
 
-      if (tinyGps.date.day() < 10) logFile.print("0");
-      logFile.print(tinyGps.date.day());
+      if ( gpsMonth < 10) logFile.print("0");
+      logFile.print(gpsMonth);
+      logFile.print("-");
+
+      if (gpsDay < 10) logFile.print("0");
+      logFile.print(gpsDay);
 
       logFile.print(",");
 
-      if (tinyGps.time.hour() < 10) logFile.print("0");
-      logFile.print(tinyGps.time.hour());
+      if (gpsHour < 10) logFile.print("0");
+      logFile.print(gpsHour);
       logFile.print(":");
 
-      if (tinyGps.time.minute() < 10) logFile.print("0");
-      logFile.print(tinyGps.time.minute());
+      if (gpsMin < 10) logFile.print("0");
+      logFile.print(gpsMin);
       logFile.print(":");
 
-      if (tinyGps.time.second() < 10) logFile.print("0");
-      logFile.print(tinyGps.time.second());
+      if (gpsSec < 10) logFile.print("0");
+      logFile.print(gpsSec);
 
       logFile.print(",");
 
@@ -628,12 +635,32 @@ void doLogging2()
 
       logFile.flush();
 
+      oled.setCursor(0,0);
+      sprintf(strbuf, "%02d:%02d:%02d", localHour,localMin,localSec);
+      oled.print(strbuf);
+
+      oled.setCursor(64,0);
+      sprintf(strbuf, "%02d/%02d/%02d", localYear%100,localMonth,localDay);
+
+      oled.print(strbuf);oled.setCursor(0,2);
+      if(tinyGps.location.rawLat().negative) {
+        oled.print("S");
+      } else {
+        oled.print("N");
+      }
+      oled.print(tinyGps.location.lat(),6);
+      oled.setCursor(0,4);
+      if(tinyGps.location.rawLng().negative) {
+        oled.print("W");
+      } else {
+        oled.print("E");
+      }
+      oled.print(tinyGps.location.lng(),6);
 #ifdef DEBUG_SERIAL
       Serial.print("Logged: ");
       Serial.print(tinyGps.location.lat(), 6);
       Serial.print(",");
       Serial.println(tinyGps.location.lng(), 6);
 #endif
-
   }
 }
